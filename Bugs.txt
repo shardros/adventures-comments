@@ -1,0 +1,5 @@
+Weird bugs:
+- If the instruction starts with a leading space don't process
+-  This statement appears to do nothing could be a task?????
+   while (length(Instruction) > 0) and (Instruction[1] = ' ') do
+        delete(Instruction, 1, 1);
