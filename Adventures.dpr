@@ -60,7 +60,8 @@ type
     end
     else
     begin
-      //Pops items from the front of the queue untill the end or a space is reached
+      //Pops items from the front of the queue untill the end or a space is
+      //reached
       while (length(Instruction) > 0) and (Instruction[1] <> ' ') do
       begin
         Command := Command + Instruction[1];
@@ -291,6 +292,24 @@ type
 
   end;
 
+  (*
+  Every command has an associated output for each "object" in the game for
+  example the rug record looks like this:
+  Item 2004 rug
+  Description: It is a large colourful rug
+  Location: 1
+  Status: large
+  *COMANDS:* move, get
+  *RESULTS:* say,You can see a trapdoor underneath;say,You can't get that it is
+      too big
+  There are
+  if a command is used on an item it looks up the result for what it should do
+  in this case to say two different things. It is passed the index of the
+  command.
+
+  The comands "list" is comma seperated and the result "list" is semi-colon
+  seperated
+  *)
   function GetResultForCommand(Results: string; Position: Integer): string;
   var
     Count: Integer;
@@ -300,6 +319,8 @@ type
     Count := 1;
     CurrentPosition := 0;
     ResultForCommand := '';
+    (*Move forwards through the list untill a semi-colon is reached, at this
+    point we know that we have a new item in the list*)
     while (CurrentPosition < Position) and (Count <= length(Results)) do
     begin
       if Results[Count] = ';' then
@@ -316,6 +337,9 @@ type
     GetResultForCommand := ResultForCommand;
   end;
 
+  (*A wrapper for writeln, used internally so that AQA could have a common file
+  for each of the games I imagine as they contain commands like say.
+  *)
   procedure Say(Speech: string);
 
   begin
@@ -324,6 +348,11 @@ type
     writeln;
   end;
 
+  (*
+  Once we have the result we need to work out what is the operator and the
+  operand, they are comma seperated and so cycle through the string untill a
+  comma is reached at which point we can return the value.
+  *)
   procedure ExtractResultForCommand(var SubCommand: string;
     var SubCommandParameter: string; ResultForCommand: string);
 
@@ -350,13 +379,17 @@ type
     end;
   end;
 
+  (*
+    Change where going goes. Used to close doors as the location is set to be
+    the null locaiton (0) or the location that the door item says that it should
+    point to. The oposite check inverts everything and is used by the door
+    method to close the other side of the door, in the other room.
+  *)
   procedure ChangeLocationReference(Direction: string;
     NewLocationReference: Integer; Places: TPlaceArray;
     IndexOfCurrentLocation: Integer; Opposite: boolean);
-
   var
     ThisPlace: TPlace;
-
   begin
     ThisPlace := Places[IndexOfCurrentLocation];
     if ((Direction = 'north') and (not Opposite)) or
@@ -380,33 +413,31 @@ type
     Places[IndexOfCurrentLocation] := ThisPlace;
   end;
 
+  //Changes the status of an item, e.g. for a door if it is open or closed
   procedure ChangeStatusOfItem(var Items: TItemArray; IndexOfItem: Integer;
     NewStatus: string);
-
   var
     ThisItem: TItem;
-
   begin
     ThisItem := Items[IndexOfItem];
     ThisItem.Status := NewStatus;
     Items[IndexOfItem] := ThisItem;
   end;
 
+  //Updates the location property of an item
   procedure ChangeLocationOfItem(var Items: TItemArray; IndexOfItem: Integer;
     NewLocation: Integer);
-
   var
     ThisItem: TItem;
-
   begin
     ThisItem := Items[IndexOfItem];
     ThisItem.Location := NewLocation;
     Items[IndexOfItem] := ThisItem;
   end;
 
+  //Opens or closes doors
   function OpenClose(Open: boolean; Items: TItemArray; Places: TPlaceArray;
     ItemToOpenClose: string; CurrentLocation: Integer): Integer;
-
   var
     Command: string;
     ResultForCommand: string;
@@ -417,7 +448,6 @@ type
     DirectionChange: string;
     ActionWorked: boolean;
     IndexOfOtherSideOfDoor: Integer;
-
   begin
     Direction := '';
     DirectionChange := '';
@@ -431,11 +461,13 @@ type
     begin
       if Items[Count].name = ItemToOpenClose then
         if Items[Count].Location = CurrentLocation then
+          (*Verify if the length of the commands is longer than 'open' and it is
+          possible open could be one of the commands seems pointsless*)
           if length(Items[Count].Commands) >= 4 then
             if pos(Command, Items[Count].Commands) <> 0 then
             begin
               if Items[Count].Status = Command then
-              begin
+              begin //Already open/closed
                 OpenClose := -2;
                 exit;
               end
@@ -444,12 +476,25 @@ type
                 OpenClose := -3;
                 exit;
               end;
+
+              //Get command from the door record
               Position := GetPositionOfCommand(Items[Count].Commands, Command);
               ResultForCommand := GetResultForCommand(Items[Count].Results,
                 Position);
               ExtractResultForCommand(Direction, DirectionChange,
                 ResultForCommand);
+
+              //Open or close the door item
               ChangeStatusOfItem(Items, Count, Command);
+
+              (*
+                Cycle through the places and make it possible or not for the
+                player to move through a door way. Direction change is used
+                because the door is actually two doors, one in each room,
+                and so the door in the other room (the other side of the door)
+                is facing 180 degrees from the direction of the other side of
+                the door relative to the player
+              *)
               Count2 := 0;
               ActionWorked := true;
               while Count2 < length(Places) do
@@ -462,6 +507,14 @@ type
                     Count2, true);
                 inc(Count2);
               end;
+
+            (* Find the other door item to close. There is a standard offset
+               between the two items and so depeding on if this is the greater
+               or less of the ofsets then a + or a - is needed
+
+               The status of the item is then changed once the ID of the item
+               has been calculated. For once no linner search.
+            *)
               if Items[Count].ID > IDDifferenceForObjectInTwoLocations then
                 IndexOfOtherSideOfDoor :=
                   GetIndexOfItem('', Items[Count].ID -
@@ -480,51 +533,63 @@ type
       OpenClose := -1;
       exit;
     end;
+    //The state was changed what state is the door in now
     OpenClose := strtoint(DirectionChange);
   end;
 
+  //Gets a random integer between two values
   function GetRandomNumber(LowerLimitValue: Integer;
     UpperLimitValue: Integer): Integer;
-
   begin
     GetRandomNumber := trunc(random * (UpperLimitValue - LowerLimitValue + 1)) +
       LowerLimitValue;
   end;
 
+  //Rolls the die
   function RollDie(Lower: string; Upper: string): Integer;
-
   var
     LowerLimitValue: Integer;
     UpperLimitValue: Integer;
     ErrorCode: Integer;
-
   begin
+    (*
+      val is an older Delphi procedure to convert from a string to an, int or a
+      float, val(string_to_convert, varible_to_return_the_value_in, error_pos)
+      the procedure "returns" the varible in the type of the second parameter
+      Error Code should really be called error pos, if it errors then the value
+      that was passed to it by the function is invalid and it asks the user.
+    *)
     LowerLimitValue := 0;
+
     UpperLimitValue := 0;
     val(Lower, LowerLimitValue, ErrorCode);
+
     if ErrorCode <> 0 then
       while (LowerLimitValue < 1) or (LowerLimitValue > 6) do
       begin
         write('Enter minimum: ');
         readln(LowerLimitValue);
       end;
+
     val(Upper, UpperLimitValue, ErrorCode);
+
     if ErrorCode <> 0 then
       while (UpperLimitValue < LowerLimitValue) or (UpperLimitValue > 6) do
       begin
         write('Enter maximum: ');
         readln(UpperLimitValue);
       end;
+
+    //Now that we have our limits we can now get our random number
     RollDie := GetRandomNumber(LowerLimitValue, UpperLimitValue);
   end;
 
+  //Unlocks and locks a door, updates the status of the door
   procedure ChangeStatusOfDoor(Items: TItemArray; CurrentLocation: Integer;
     IndexOfItemToLockUnlock: Integer;
     IndexOfOtherSideItemToLockUnlock: Integer);
-
   var
     MessageToDisplay: string;
-
   begin
     if (CurrentLocation = Items[IndexOfItemToLockUnlock].Location) or
       (CurrentLocation = Items[IndexOfOtherSideItemToLockUnlock].Location) then

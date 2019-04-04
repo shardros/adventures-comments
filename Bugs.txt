@@ -3,3 +3,5 @@ Weird bugs:
 -  This statement appears to do nothing could be a task?????
    while (length(Instruction) > 0) and (Instruction[1] = ' ') do
         delete(Instruction, 1, 1);
+- Moving rug always reveals a trap door even if its already been moved.
+- Crashes on invalid filename
